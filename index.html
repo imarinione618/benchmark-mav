@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benchmark Comercial MAV · one618 (uso interno)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --blue:#1A49C8; --pink:#E32D91; --purple:#7B1FAE; --gray:#B2B2B2;
+    --ink:#1a1a2e; --muted:#6b7280; --line:#e5e7eb; --bg:#eef0f5;
+    --good:#16a34a; --warn:#eab308; --bad:#dc2626;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  /* top bar */
+  .topbar{background:linear-gradient(120deg,var(--blue),var(--purple));color:#fff;border-radius:12px;
+    padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+  .topbar .brand{font-size:12px;letter-spacing:2px;opacity:.85;font-weight:700}
+  .topbar h1{font-size:19px;font-weight:700;margin-top:2px}
+  .priv{background:rgba(255,255,255,.18);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600}
+  /* controls */
+  .controls{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-top:14px;
+    display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+  .ctl{display:flex;flex-direction:column;gap:4px}
+  .ctl label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600}
+  .ctl input,.ctl select{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;min-width:120px;font-family:inherit}
+  .ctl.emp input{min-width:280px}
+  button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  button.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+  button:hover{opacity:.92}
+  .status{font-size:12px;color:var(--muted);margin:10px 2px}
+  .status.err{color:var(--bad);font-weight:600}
+  /* tabs */
+  .tabs{display:flex;gap:8px;margin:16px 0 4px}
+  .tab{background:#fff;border:1px solid var(--line);border-radius:8px 8px 0 0;padding:9px 18px;cursor:pointer;font-weight:600;color:var(--muted)}
+  .tab.on{color:var(--blue);border-bottom:2px solid var(--blue)}
+  .page{background:#fff;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:22px}
+  .page h2{font-size:16px;margin-bottom:2px}
+  .page .peri{color:var(--muted);font-size:12px;margin-bottom:16px}
+  h3.sc{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--blue);font-weight:700;margin:22px 0 12px}
+  /* kpis */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .kpi{border:1px solid var(--line);border-radius:10px;padding:13px 15px}
+  .kpi .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .kpi .v{font-size:23px;font-weight:800;margin-top:3px}
+  .kpi .s{font-size:12px;color:var(--muted);margin-top:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .cardc{border:1px solid var(--line);border-radius:10px;padding:14px}
+  .cardc h4{font-size:13px;margin-bottom:10px}
+  canvas{max-width:100%}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:600}
+  tr.hl td{background:#eef2ff;font-weight:700}
+  .seg-aval{color:var(--blue)} .seg-gar{color:var(--purple)} .seg-nogar{color:var(--pink)}
+  /* benchmark */
+  .verdict{display:flex;gap:22px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:6px}
+  .verdict .big{font-size:34px;font-weight:800;line-height:1}
+  .verdict p{color:var(--muted);font-size:13px;line-height:1.5;margin-top:4px}
+  .pct-hi{color:var(--bad)} .pct-mid{color:var(--warn)} .pct-lo{color:var(--good)}
+  .scale{position:relative;height:60px;margin:30px 8px 40px}
+  .track{position:absolute;top:24px;left:0;right:0;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--good),var(--warn) 55%,var(--bad))}
+  .mk{position:absolute;top:6px;transform:translateX(-50%);text-align:center;font-size:11px}
+  .mk .dot{width:2px;height:32px;background:var(--ink);opacity:.45;margin:0 auto}
+  .you{position:absolute;top:-16px;transform:translateX(-50%);text-align:center}
+  .you .lbl{background:var(--ink);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap;margin-bottom:2px}
+  .you .pin{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid var(--ink);margin:0 auto}
+  .axis{position:absolute;bottom:-4px;width:100%;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+  .save{display:flex;gap:22px;align-items:center;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:18px 22px}
+  .save .amt{font-size:32px;font-weight:800;color:var(--good);line-height:1}
+  .save .amt small{display:block;font-size:13px;color:var(--muted);font-weight:600;margin-top:2px}
+  .save ul{list-style:none;font-size:13px;line-height:1.7}
+  .save li b{color:var(--good)}
+  .empty{color:var(--muted);text-align:center;padding:40px;font-size:14px}
+  .note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .foot{font-size:11px;color:var(--muted);margin-top:20px;padding-top:12px;border-top:1px solid var(--line);line-height:1.6}
+  @media print{
+    body{background:#fff} .controls,.tabs,.priv{display:none}
+    .topbar{border-radius:0} .page{border:0;padding:0}
+    #pageMercado{page-break-after:always}
+  }
+</style>
+</head>
+<body>
+<!-- ── Candado opcional (deterrente, NO es seguridad real: la URL de Pages es publica) ──
+     Para activarlo: pone una clave entre comillas en GATE_PASS (abajo). Vacio = sin candado. -->
+<div id="gate" style="display:none;position:fixed;inset:0;background:#0f1226;color:#fff;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:'Segoe UI',Arial">
+  <div style="font-size:13px;letter-spacing:3px;opacity:.6">ONE618 · ACCESO INTERNO</div>
+  <input id="gatePass" type="password" placeholder="Clave" onkeydown="if(event.key==='Enter')checkGate()" style="padding:10px 14px;border-radius:8px;border:0;font-size:15px;text-align:center">
+  <button onclick="checkGate()" style="padding:10px 22px">Entrar</button>
+  <div id="gateErr" style="color:#f87171;font-size:13px;min-height:16px"></div>
+</div>
+<script>
+  const GATE_PASS=''; // ← poné aquí una clave para activar el candado. Vacío = sin candado.
+  (function(){ if(GATE_PASS){ var g=document.getElementById('gate'); g.style.display='flex'; document.body.style.overflow='hidden'; } })();
+  function checkGate(){ if(document.getElementById('gatePass').value===GATE_PASS){ document.getElementById('gate').style.display='none'; document.body.style.overflow=''; } else { document.getElementById('gateErr').textContent='Clave incorrecta'; } }
+</script>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <div class="brand">ONE618 · RESEARCH DE FINANCIAMIENTO MAV</div>
+      <h1>Benchmark Comercial · Cheques, Pagarés y FCE</h1>
+    </div>
+    <div class="priv">🔒 USO INTERNO — no publicar</div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl"><label>Desde</label><input type="date" id="fDesde"></div>
+    <div class="ctl"><label>Hasta</label><input type="date" id="fHasta"></div>
+    <div class="ctl"><label>Instrumento</label><select id="fInst"><option value="ALL">Todos</option></select></div>
+    <div class="ctl"><label>Moneda</label><select id="fMon"><option value="ALL">Todas</option></select></div>
+    <div class="ctl emp"><label>Empresa (para benchmark)</label>
+      <input list="empList" id="fEmp" placeholder="Escribí para buscar…"><datalist id="empList"></datalist></div>
+    <button id="btnGen">Generar</button>
+    <button class="ghost" id="btnCsv">Cargar CSV local</button>
+    <a id="lnkCsv" class="ghost" style="text-decoration:none;padding:9px 16px;border-radius:8px;border:1px solid var(--blue);color:var(--blue);font-weight:600;font-size:13px" target="_blank" rel="noopener">Descargar CSV del monitor</a>
+    <input type="file" id="fileInput" accept=".csv" style="display:none">
+    <button class="ghost" onclick="window.print()">Imprimir / PDF</button>
+  </div>
+  <div class="status" id="status">Cargando datos del monitor…</div>
+
+  <div class="tabs">
+    <div class="tab on" id="tabMkt" onclick="showTab('mkt')">1 · Resumen de mercado</div>
+    <div class="tab" id="tabBmk" onclick="showTab('bmk')">2 · Benchmark de empresa</div>
+  </div>
+
+  <!-- PÁGINA 1: MERCADO -->
+  <div class="page" id="pageMercado">
+    <h2>Resumen de mercado MAV</h2>
+    <div class="peri" id="mktPeri">—</div>
+    <div class="kpis" id="mktKpis"></div>
+
+    <h3 class="sc">Composición por instrumento</h3>
+    <div class="grid2">
+      <div class="cardc"><h4>Monto negociado por instrumento</h4><canvas id="chInst" height="200"></canvas></div>
+      <div class="cardc"><h4>Volumen por plazo (tramo)</h4><canvas id="chTramo" height="200"></canvas></div>
+    </div>
+
+    <h3 class="sc">Tasas de referencia por tipo de garantía</h3>
+    <div class="cardc">
+      <table id="tblSeg"><thead><tr><th>Segmento</th><th>Tasa prom. ponderada</th><th>Volumen</th><th>% del total</th><th>Operaciones</th></tr></thead><tbody></tbody></table>
+      <div class="note">Tasa promedio ponderada por monto. Filtrable por instrumento y moneda en la barra superior.</div>
+    </div>
+
+    <h3 class="sc">Top empresas por volumen financiado</h3>
+    <div class="cardc">
+      <table id="tblTop"><thead><tr><th>Empresa</th><th>Categoría</th><th>Volumen</th><th>Tasa pond.</th><th>Plazo pond. (d)</th><th>Ops</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="foot" id="mktFoot"></div>
+  </div>
+
+  <!-- PÁGINA 2: BENCHMARK -->
+  <div class="page" id="pageBenchmark" style="display:none">
+    <div id="bmkEmpty" class="empty">Elegí una empresa en la barra superior y tocá <b>Generar</b>.</div>
+    <div id="bmkContent" style="display:none">
+      <h2 id="bmkTitle">—</h2>
+      <div class="peri" id="bmkPeri">—</div>
+
+      <div class="verdict">
+        <div><div class="big" id="bmkPctBig">—</div></div>
+        <div><div id="bmkVerdict" style="font-size:17px;font-weight:700"></div><p id="bmkVerdictP"></p></div>
+      </div>
+
+      <h3 class="sc">Dónde cae vs. el mercado (mismo instrumento y segmento)</h3>
+      <div class="scale" id="bmkScale"></div>
+
+      <div class="grid3" style="margin-top:6px">
+        <div class="kpi"><div class="k">Tasa de la empresa</div><div class="v" id="bmkRate">—</div><div class="s">ponderada por monto</div></div>
+        <div class="kpi"><div class="k">Promedio de mercado</div><div class="v" id="bmkMkt">—</div><div class="s" id="bmkSegLbl">—</div></div>
+        <div class="kpi"><div class="k">Brecha</div><div class="v" id="bmkGap">—</div><div class="s">vs. promedio</div></div>
+      </div>
+
+      <h3 class="sc">Ahorro potencial</h3>
+      <div class="save">
+        <div><div class="amt" id="bmkSave">—<small>ahorro anual estimado</small></div></div>
+        <ul id="bmkSaveList"></ul>
+      </div>
+      <div class="note" id="bmkSaveNote"></div>
+
+      <h3 class="sc">Detalle por tramo de plazo</h3>
+      <div class="cardc">
+        <table id="bmkTramo"><thead><tr><th>Tramo</th><th>Tasa empresa</th><th>Tasa mercado</th><th>Brecha</th><th>Volumen empresa</th><th>Ops</th></tr></thead><tbody></tbody></table>
+      </div>
+
+      <h3 class="sc">Operaciones de la empresa en el período</h3>
+      <div class="cardc">
+        <table id="bmkOps"><thead><tr><th>Fecha</th><th>Instrumento</th><th>Segmento</th><th>Moneda</th><th>Tramo</th><th>Tasa</th><th>Monto</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="foot" id="bmkFoot"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════ CONFIG (mismo monitor que el dashboard) ══════════════
+const SHEET_ID = '11r7oJ9mm4-IUHszK6LkTAFZOzFUe0RZBEWgP7ZzwvvE';
+const GID      = '220459711';
+const PUB_ID   = '2PACX-1vTwkGoYISKklkkzXek9Rr_buY6B-85SWYee03zbLdAIRjwONAFtNOm1NW24ixVU-l0AJL1A3UXyMWvk';
+const CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?gid=${GID}&single=true&output=csv`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`,
+];
+const CAT_COLORS = {'SGR':'#E32D91','PyME':'#1A49C8','Banco':'#7B1FAE','Gran empresa':'#212121','Sector público/ Asociación civil':'#B2B2B2','Sin clasificar':'#6B7280'};
+const INST_COLORS = ['#1A49C8','#E32D91','#7B1FAE','#B2B2B2','#22c55e','#eab308'];
+
+// ══════════════ ESTADO ══════════════
+let rawData = [];
+let charts = {};
+
+// ══════════════ PARSEO (reutiliza lógica del dashboard) ══════════════
+function parseArg(raw){
+  let s=(raw||'').replace(/"/g,'').trim();
+  if(!s) return NaN;
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+  else { const d=(s.match(/\./g)||[]).length; if(d>1) s=s.replace(/\./g,''); }
+  return parseFloat(s);
+}
+function parseCSVRow(line){
+  const r=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(c==='"'){ if(q&&line[i+1]==='"'){cur+='"';i++;} else q=!q; }
+    else if(c===','&&!q){ r.push(cur); cur=''; } else cur+=c; }
+  r.push(cur); return r;
+}
+function parseCSV(text){
+  const lines=text.split(/\r?\n/); if(lines.length<2) return [];
+  const headers=parseCSVRow(lines[0].replace(/^﻿/,'')).map(h=>h.trim().replace(/\\$/,'').replace(/"/g,''));
+  const idx={}; headers.forEach((h,i)=>idx[h]=i);
+  const C={fecha:idx['FEC.SUB.']??1,segmento:idx['SEGMENTO']??2,tipo:idx['TIPO INSTRUMENTO']??6,
+    tasaC:idx['TASA C.']??14,moneda:idx['MONEDA']??17,monto:idx['MONTO']??18,
+    empresa:idx['NOMBRE RESPONSABLE']??24,categoria:idx['CATEGORIA']??26,tramo:idx['TRAMO']??27,ppv:idx['PPV']??-1};
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i].trim(); if(!line) continue;
+    const r=parseCSVRow(line);
+    const fr=(r[C.fecha]||'').replace(/"/g,'').trim(); if(!fr) continue;
+    const p=fr.split('/'); if(p.length!==3) continue;
+    const date=p[2].padStart(4,'0')+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+    const tasa=parseArg(r[C.tasaC]), monto=parseArg(r[C.monto]);
+    if(isNaN(tasa)||isNaN(monto)||monto<=0) continue;
+    out.push({date,
+      segmento:(r[C.segmento]||'').replace(/"/g,'').trim(),
+      tipo:(r[C.tipo]||'').replace(/"/g,'').trim(),
+      tasa, moneda:(r[C.moneda]||'').replace(/"/g,'').trim(), monto,
+      empresa:(r[C.empresa]||'').replace(/"/g,'').trim(),
+      categoria:(r[C.categoria]||'').replace(/"/g,'').trim(),
+      tramo:(r[C.tramo]||'').replace(/"/g,'').trim(),
+      ppv:C.ppv>=0?parseArg(r[C.ppv]):NaN});
+  }
+  return out;
+}
+
+// ══════════════ HELPERS ══════════════
+const fmtM = n => '$'+(n/1e6).toLocaleString('es-AR',{maximumFractionDigits:0})+' M';
+const fmtN = n => n.toLocaleString('es-AR',{maximumFractionDigits:0});
+const pct  = n => (isNaN(n)?'—':n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%');
+const wavg = rows => { let sw=0,sv=0; rows.forEach(r=>{sw+=r.tasa*r.monto;sv+=r.monto;}); return sv?sw/sv:NaN; };
+const wppv = rows => { let sw=0,sv=0; rows.forEach(r=>{ if(!isNaN(r.ppv)){sw+=r.ppv*r.monto;sv+=r.monto;} }); return sv?sw/sv:NaN; };
+const sum  = rows => rows.reduce((a,r)=>a+r.monto,0);
+// midpoint de días por tramo, para estimar plazo si no hay PPV
+function tramoDays(t){
+  const m=(t||'').match(/(\d+)\D+(\d+)/); if(m) return ((+m[1])+(+m[2]))/2;
+  const g=(t||'').match(/(\d+)/); return g?(+g[1]):90;
+}
+function instMatch(tipo,f){ if(f==='ALL') return true; return tipo===f; }
+
+// ══════════════ FILTRO ══════════════
+function currentFilter(){
+  const d=document.getElementById('fDesde').value, h=document.getElementById('fHasta').value;
+  const inst=document.getElementById('fInst').value, mon=document.getElementById('fMon').value;
+  return rawData.filter(r=>{
+    if(d && r.date<d) return false;
+    if(h && r.date>h) return false;
+    if(!instMatch(r.tipo,inst)) return false;
+    if(mon!=='ALL' && r.moneda!==mon) return false;
+    return true;
+  });
+}
+function periLabel(){
+  const d=document.getElementById('fDesde').value, h=document.getElementById('fHasta').value;
+  return `Período ${d||'—'} a ${h||'—'}`;
+}
+
+// ══════════════ RENDER MERCADO ══════════════
+function renderMercado(){
+  const data=currentFilter();
+  document.getElementById('mktPeri').textContent=periLabel()+` · ${fmtN(data.length)} operaciones`;
+  // KPIs
+  const total=sum(data);
+  const nEmp=new Set(data.map(r=>r.empresa).filter(Boolean)).size;
+  const tasaG=wavg(data);
+  const kpis=[
+    ['Monto negociado', fmtM(total)],
+    ['Operaciones', fmtN(data.length)],
+    ['Empresas financiadas', fmtN(nEmp)],
+    ['Tasa prom. ponderada', pct(tasaG)],
+  ];
+  document.getElementById('mktKpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="k">${k[0]}</div><div class="v">${k[1]}</div></div>`).join('');
+
+  // Mix por instrumento
+  const byInst={}; data.forEach(r=>{byInst[r.tipo]=(byInst[r.tipo]||0)+r.monto;});
+  const instL=Object.keys(byInst), instV=instL.map(k=>byInst[k]);
+  drawPie('chInst',instL,instV.map(v=>v/1e6),INST_COLORS);
+
+  // Volumen por tramo
+  const byTr={}; data.forEach(r=>{const t=r.tramo||'—'; byTr[t]=(byTr[t]||0)+r.monto;});
+  const trL=Object.keys(byTr).sort((a,b)=>tramoDays(a)-tramoDays(b));
+  drawBar('chTramo',trL,trL.map(t=>byTr[t]/1e6),'#1A49C8','Millones $');
+
+  // Tasas por segmento
+  const segs={}; data.forEach(r=>{const s=r.segmento||'—'; (segs[s]=segs[s]||[]).push(r);});
+  const segRows=Object.keys(segs).map(s=>({s,rows:segs[s]})).sort((a,b)=>sum(b.rows)-sum(a.rows));
+  const segCls=s=>/aval/i.test(s)?'seg-aval':/no\s*gar/i.test(s)?'seg-nogar':/gar/i.test(s)?'seg-gar':'';
+  document.querySelector('#tblSeg tbody').innerHTML=segRows.map(x=>{
+    const v=sum(x.rows);
+    return `<tr><td class="${segCls(x.s)}">${x.s}</td><td>${pct(wavg(x.rows))}</td><td>${fmtM(v)}</td><td>${(v/total*100).toFixed(1)}%</td><td>${fmtN(x.rows.length)}</td></tr>`;
+  }).join('');
+
+  // Top empresas
+  const byEmp={}; data.forEach(r=>{ if(!r.empresa) return; (byEmp[r.empresa]=byEmp[r.empresa]||[]).push(r);});
+  const top=Object.keys(byEmp).map(e=>({e,rows:byEmp[e]})).sort((a,b)=>sum(b.rows)-sum(a.rows)).slice(0,15);
+  document.querySelector('#tblTop tbody').innerHTML=top.map(x=>{
+    const cat=x.rows[0].categoria||'—';
+    return `<tr><td>${x.e}</td><td>${cat}</td><td>${fmtM(sum(x.rows))}</td><td>${pct(wavg(x.rows))}</td><td>${isNaN(wppv(x.rows))?'—':fmtN(wppv(x.rows))}</td><td>${fmtN(x.rows.length)}</td></tr>`;
+  }).join('');
+
+  document.getElementById('mktFoot').innerHTML=`Fuente: monitor MAV de one618 (operaciones individuales del Mercado Argentino de Valores). Tasas promedio ponderadas por monto. Documento de uso interno — no constituye asesoramiento financiero.`;
+}
+
+// ══════════════ RENDER BENCHMARK ══════════════
+function renderBenchmark(){
+  const emp=document.getElementById('fEmp').value.trim();
+  const box=document.getElementById('bmkContent'), empty=document.getElementById('bmkEmpty');
+  if(!emp){ box.style.display='none'; empty.style.display='block'; return; }
+  const data=currentFilter();
+  const eRows=data.filter(r=>r.empresa===emp);
+  if(!eRows.length){ box.style.display='none'; empty.style.display='block';
+    empty.innerHTML=`Sin operaciones de <b>${emp}</b> en el período/filtros elegidos. Ampliá el rango de fechas o revisá el nombre.`; return; }
+  box.style.display='block'; empty.style.display='none';
+
+  document.getElementById('bmkTitle').textContent=emp;
+  const cat=eRows[0].categoria||'—';
+  document.getElementById('bmkPeri').textContent=`${cat} · ${periLabel()} · ${fmtN(eRows.length)} operaciones · ${fmtM(sum(eRows))}`;
+
+  // Segmento/instrumento dominante de la empresa (por volumen) → universo de mercado comparable
+  const domKey = key => { const g={}; eRows.forEach(r=>{g[r[key]]=(g[r[key]]||0)+r.monto;}); return Object.keys(g).sort((a,b)=>g[b]-g[a])[0]; };
+  const domSeg=domKey('segmento'), domInst=domKey('tipo');
+  const mkt=data.filter(r=>r.segmento===domSeg && r.tipo===domInst);
+  const eComp=eRows.filter(r=>r.segmento===domSeg && r.tipo===domInst);
+
+  const eRate=wavg(eComp), mRate=wavg(mkt), gap=eRate-mRate;
+  document.getElementById('bmkRate').textContent=pct(eRate);
+  document.getElementById('bmkMkt').textContent=pct(mRate);
+  document.getElementById('bmkSegLbl').textContent=`${domInst} · ${domSeg}`;
+  document.getElementById('bmkGap').innerHTML=`<span style="color:${gap>0?'var(--bad)':'var(--good)'}">${gap>0?'+':''}${gap.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})} pp</span>`;
+
+  // Percentil por VOLUMEN: % del volumen de mercado transado a tasa <= tasa de la empresa
+  const volMenor=mkt.filter(r=>r.tasa<=eRate).reduce((a,r)=>a+r.monto,0);
+  const volTot=sum(mkt);
+  const percentile=volTot?Math.round(volMenor/volTot*100):NaN;
+  const pcls=percentile>=75?'pct-hi':percentile>=50?'pct-mid':'pct-lo';
+  document.getElementById('bmkPctBig').innerHTML=`<span class="${pcls}">P${percentile}</span>`;
+  let verd, verdP;
+  if(percentile>=75){verd='Está pagando entre lo más caro del mercado';}
+  else if(percentile>=50){verd='Paga por encima de la mediana del mercado';}
+  else if(percentile>=25){verd='Paga por debajo de la mediana del mercado';}
+  else {verd='Está entre lo más barato del mercado';}
+  verdP=`Su tasa (${pct(eRate)}) es mayor o igual a la de <b>${isNaN(percentile)?'—':percentile}%</b> del volumen negociado en ${domInst.toLowerCase()} ${domSeg.toLowerCase()} en el período. Promedio de mercado: ${pct(mRate)}.`;
+  document.getElementById('bmkVerdict').textContent=verd;
+  document.getElementById('bmkVerdictP').innerHTML=verdP;
+
+  // Escala de percentiles por volumen (P10..P90) para posicionar
+  const sorted=[...mkt].sort((a,b)=>a.tasa-b.tasa);
+  const totV=sum(sorted);
+  function rateAtPct(p){ let acc=0; const tgt=totV*p/100; for(const r of sorted){acc+=r.monto; if(acc>=tgt) return r.tasa;} return sorted.length?sorted[sorted.length-1].tasa:NaN; }
+  const p10=rateAtPct(10), p90=rateAtPct(90), p50=rateAtPct(50);
+  const lo=Math.min(p10,eRate,mRate), hi=Math.max(p90,eRate,mRate);
+  const span=(hi-lo)||1;
+  const posOf=v=>Math.max(0,Math.min(100,(v-lo)/span*100));
+  document.getElementById('bmkScale').innerHTML=`
+    <div class="track"></div>
+    <div class="you" style="left:${posOf(eRate)}%"><div class="lbl">${emp.split(' ')[0]} · ${pct(eRate)}</div><div class="pin"></div></div>
+    <div class="mk" style="left:${posOf(p50)}%"><div class="dot"></div>Mediana<br>${pct(p50)}</div>
+    <div class="mk" style="left:${posOf(mRate)}%"><div class="dot"></div>Prom.<br>${pct(mRate)}</div>
+    <div class="axis"><span>P10 ${pct(p10)} (barato)</span><span>P90 ${pct(p90)} (caro)</span></div>`;
+
+  // Ahorro estimado
+  const vol=sum(eComp);
+  const plazo=isNaN(wppv(eComp))?wavg2Term(eComp):wppv(eComp);
+  const bestRate=Math.min(mRate,p50);
+  const saveAvg=Math.max(0,(eRate-mRate))/100*vol*(plazo/365);
+  const saveP50=Math.max(0,(eRate-p50))/100*vol*(plazo/365);
+  document.getElementById('bmkSave').innerHTML=`≈ ${fmtM(saveAvg)}<small>ahorro anual estimado (al promedio de mercado)</small>`;
+  document.getElementById('bmkSaveList').innerHTML=`
+    <li>Bajando de <b>${pct(eRate)}</b> al promedio de mercado <b>${pct(mRate)}</b> (${(eRate-mRate).toFixed(2)} pp)</li>
+    <li>Sobre volumen comparable de <b>${fmtM(vol)}</b> y plazo pond. <b>${fmtN(plazo)} días</b></li>
+    <li>Llegando a la <b>mediana (${pct(p50)})</b> el ahorro sería <b>≈ ${fmtM(saveP50)}</b></li>`;
+  document.getElementById('bmkSaveNote').innerHTML=`Ahorro = Δtasa × volumen comparable × (plazo/365). Universo comparable: ${domInst} · ${domSeg}. Plazo tomado de PPV real ${isNaN(wppv(eComp))?'(o estimado por tramo si falta)':''}.`;
+
+  // Detalle por tramo
+  const tramos=[...new Set(eComp.map(r=>r.tramo))].sort((a,b)=>tramoDays(a)-tramoDays(b));
+  document.querySelector('#bmkTramo tbody').innerHTML=tramos.map(t=>{
+    const er=eComp.filter(r=>r.tramo===t), mr=mkt.filter(r=>r.tramo===t);
+    const et=wavg(er), mt=wavg(mr), g=et-mt;
+    return `<tr><td>${t}</td><td>${pct(et)}</td><td>${pct(mt)}</td><td style="color:${g>0?'var(--bad)':'var(--good)'}">${g>0?'+':''}${g.toFixed(2)} pp</td><td>${fmtM(sum(er))}</td><td>${fmtN(er.length)}</td></tr>`;
+  }).join('');
+
+  // Operaciones
+  document.querySelector('#bmkOps tbody').innerHTML=[...eRows].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,40).map(r=>
+    `<tr><td>${r.date}</td><td>${r.tipo}</td><td>${r.segmento}</td><td>${r.moneda}</td><td>${r.tramo}</td><td>${pct(r.tasa)}</td><td>${fmtM(r.monto)}</td></tr>`).join('');
+
+  document.getElementById('bmkFoot').innerHTML=`Fuente: monitor MAV de one618. Percentil calculado por volumen sobre el universo comparable (mismo instrumento y segmento) del período. Uso interno — no constituye asesoramiento financiero ni oferta.`;
+}
+function wavg2Term(rows){ let sw=0,sv=0; rows.forEach(r=>{sw+=tramoDays(r.tramo)*r.monto;sv+=r.monto;}); return sv?sw/sv:90; }
+
+// ══════════════ CHARTS ══════════════
+function drawPie(id,labels,vals,colors){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors}]},
+    options:{plugins:{legend:{position:'right',labels:{font:{size:11}}},
+      tooltip:{callbacks:{label:c=>`${c.label}: $${c.raw.toLocaleString('es-AR',{maximumFractionDigits:0})} M`}}}}});
+}
+function drawBar(id,labels,vals,color,yt){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:color}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:yt},ticks:{callback:v=>v.toLocaleString('es-AR',{maximumFractionDigits:0})}}}}});
+}
+
+// ══════════════ INIT / UI ══════════════
+function initFilters(){
+  // fechas: último mes presente
+  const dates=rawData.map(r=>r.date).filter(Boolean).sort();
+  if(dates.length){
+    const max=dates[dates.length-1];
+    const desde=max.slice(0,7)+'-01';
+    document.getElementById('fDesde').value=desde;
+    document.getElementById('fHasta').value=max;
+  }
+  // instrumentos
+  const insts=[...new Set(rawData.map(r=>r.tipo).filter(Boolean))];
+  const selI=document.getElementById('fInst');
+  insts.forEach(i=>{const o=document.createElement('option');o.value=i;o.textContent=i;selI.appendChild(o);});
+  // monedas
+  const mons=[...new Set(rawData.map(r=>r.moneda).filter(Boolean))];
+  const selM=document.getElementById('fMon');
+  mons.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;selM.appendChild(o);});
+  refreshEmpList();
+}
+function refreshEmpList(){
+  const data=currentFilter();
+  const byEmp={}; data.forEach(r=>{ if(r.empresa)byEmp[r.empresa]=(byEmp[r.empresa]||0)+r.monto;});
+  const emps=Object.keys(byEmp).sort((a,b)=>byEmp[b]-byEmp[a]);
+  document.getElementById('empList').innerHTML=emps.map(e=>`<option value="${e.replace(/"/g,'&quot;')}">`).join('');
+}
+function showTab(t){
+  document.getElementById('tabMkt').classList.toggle('on',t==='mkt');
+  document.getElementById('tabBmk').classList.toggle('on',t==='bmk');
+  document.getElementById('pageMercado').style.display=t==='mkt'?'block':'none';
+  document.getElementById('pageBenchmark').style.display=t==='bmk'?'block':'none';
+}
+function regen(){ renderMercado(); refreshEmpList(); renderBenchmark(); }
+
+function setStatus(msg,err){ const s=document.getElementById('status'); s.textContent=msg; s.className='status'+(err?' err':''); }
+
+async function loadData(){
+  setStatus('Cargando datos del monitor…');
+  let lastErr='';
+  for(const url of CSV_URLS){
+    try{
+      const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
+      rawData=parseCSV(await res.text());
+      if(!rawData.length) throw new Error('CSV sin filas válidas');
+      setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del monitor.`);
+      initFilters(); regen(); return;
+    }catch(e){ lastErr=e.message; }
+  }
+  setStatus(`No se pudo acceder al monitor online (${lastErr}). Usá “Cargar CSV local” con el CSV descargado del Sheet.`,true);
+}
+
+// eventos
+document.getElementById('lnkCsv').href=CSV_URLS[0];
+document.getElementById('btnGen').onclick=()=>{ regen(); if(document.getElementById('fEmp').value.trim()) showTab('bmk'); };
+document.getElementById('fInst').onchange=regen;
+document.getElementById('fMon').onchange=regen;
+document.getElementById('fDesde').onchange=regen;
+document.getElementById('fHasta').onchange=regen;
+document.getElementById('btnCsv').onclick=()=>document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ rawData=parseCSV(rd.result);
+    if(!rawData.length){ setStatus('El CSV no tiene filas válidas.',true); return; }
+    setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del archivo ${f.name}.`);
+    initFilters(); regen(); };
+  rd.readAsText(f,'UTF-8');
+};
+
+loadData();
+</script>
+</body>
+</html>
