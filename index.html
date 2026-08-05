@@ -414,11 +414,13 @@ function renderBenchmark(){
   const bestRate=Math.min(mRate,p50);
   const saveAvg=Math.max(0,(eRate-mRate))/100*vol*(plazo/365);
   const saveP50=Math.max(0,(eRate-p50))/100*vol*(plazo/365);
+  const saveAnual=Math.max(0,(eRate-mRate))/100*vol;
   document.getElementById('bmkSave').innerHTML=`≈ ${fmtMoney(saveAvg)}<small>ahorro estimado sobre lo operado en el período (al promedio de mercado)</small>`;
   document.getElementById('bmkSaveList').innerHTML=`
     <li>Bajando de <b>${pct(eRate)}</b> al promedio de mercado <b>${pct(mRate)}</b> (${(eRate-mRate).toFixed(2)} pp)</li>
     <li>Sobre volumen comparable de <b>${fmtM(vol)}</b> y plazo pond. <b>${fmtN(plazo)} días</b></li>
-    <li>Llegando a la <b>mediana (${pct(p50)})</b> el ahorro sería <b>≈ ${fmtMoney(saveP50)}</b></li>`;
+    <li>Llegando a la <b>mediana (${pct(p50)})</b> el ahorro sería <b>≈ ${fmtMoney(saveP50)}</b></li>
+    <li><b>Proyección anual</b> — si sostenés este volumen financiado todo el año: <b>≈ ${fmtMoney(saveAnual)}</b> <span style="color:var(--muted)">(supuesto)</span></li>`;
   document.getElementById('bmkSaveNote').innerHTML=`Ahorro = Δtasa × volumen comparable × (plazo/365) — es el interés que pagó de más en estas operaciones, no anualizado. Universo comparable: ${domInst} · ${domSeg}. Plazo tomado de PPV real ${isNaN(wppv(eComp))?'(o estimado por tramo si falta)':''}.`;
 
   // Detalle por tramo
