@@ -50,6 +50,7 @@
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
   .cardc{border:1px solid var(--line);border-radius:10px;padding:14px}
   .cardc h4{font-size:13px;margin-bottom:10px}
+  .cardc .chartbox{position:relative;height:300px;margin-top:4px}
   canvas{max-width:100%}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--line)}
@@ -137,19 +138,19 @@
 
     <h3 class="sc">Composición por instrumento</h3>
     <div class="grid2">
-      <div class="cardc"><h4>Monto negociado por instrumento</h4><canvas id="chInst" height="200"></canvas></div>
-      <div class="cardc"><h4>Volumen por plazo (tramo)</h4><canvas id="chTramo" height="200"></canvas></div>
+      <div class="cardc"><h4>Monto negociado por instrumento</h4><div class="chartbox"><canvas id="chInst"></canvas></div></div>
+      <div class="cardc"><h4>Volumen por plazo de vencimiento</h4><div class="chartbox"><canvas id="chTramo"></canvas></div></div>
+    </div>
+
+    <h3 class="sc">Evolución de tasa ponderada</h3>
+    <div class="cardc"><div class="chartbox"><canvas id="chEvol"></canvas></div>
+      <div class="note">Tasa promedio ponderada por monto, por día y segmento (línea "General" = todo el mercado filtrado). Filtrable por instrumento y moneda.</div>
     </div>
 
     <h3 class="sc">Tasas de referencia por tipo de garantía</h3>
     <div class="cardc">
       <table id="tblSeg"><thead><tr><th>Segmento</th><th>Tasa prom. ponderada</th><th>Volumen</th><th>% del total</th><th>Operaciones</th></tr></thead><tbody></tbody></table>
       <div class="note">Tasa promedio ponderada por monto. Filtrable por instrumento y moneda en la barra superior.</div>
-    </div>
-
-    <h3 class="sc">Top empresas por volumen financiado</h3>
-    <div class="cardc">
-      <table id="tblTop"><thead><tr><th>Empresa</th><th>Categoría</th><th>Volumen</th><th>Tasa pond.</th><th>Plazo pond. (d)</th><th>Ops</th></tr></thead><tbody></tbody></table>
     </div>
     <div class="foot" id="mktFoot"></div>
   </div>
@@ -208,6 +209,10 @@ const CSV_URLS = [
 ];
 const CAT_COLORS = {'SGR':'#E32D91','PyME':'#1A49C8','Banco':'#7B1FAE','Gran empresa':'#212121','Sector público/ Asociación civil':'#B2B2B2','Sin clasificar':'#6B7280'};
 const INST_COLORS = ['#1A49C8','#E32D91','#7B1FAE','#B2B2B2','#22c55e','#eab308'];
+// Segmentos estilo informe MAV
+const SEG_COLOR={'Avalado':'#29ABE2','Garantizado':'#F7941E','No Garantizado':'#0A2472','Otro':'#B2B2B2'};
+const SEG_STACK=['No Garantizado','Avalado','Garantizado','Otro']; // orden de apilado (abajo→arriba)
+function segBucket(s){ if(/no\s*gar/i.test(s)) return 'No Garantizado'; if(/aval/i.test(s)) return 'Avalado'; if(/gar/i.test(s)) return 'Garantizado'; return 'Otro'; }
 
 // ══════════════ ESTADO ══════════════
 let rawData = [];
@@ -308,26 +313,37 @@ function renderMercado(){
   const instL=Object.keys(byInst), instV=instL.map(k=>byInst[k]);
   drawPie('chInst',instL,instV.map(v=>v/1e6),INST_COLORS);
 
-  // Volumen por tramo
-  const byTr={}; data.forEach(r=>{const t=r.tramo||'—'; byTr[t]=(byTr[t]||0)+r.monto;});
-  const trL=Object.keys(byTr).sort((a,b)=>tramoDays(a)-tramoDays(b));
-  drawBar('chTramo',trL,trL.map(t=>byTr[t]/1e6),'#1A49C8','Millones $');
+  // Volumen por plazo, apilado por segmento (excluye tramo vacío → sin rango roto)
+  const trData=data.filter(r=>r.tramo);
+  const trL=[...new Set(trData.map(r=>r.tramo))].sort((a,b)=>tramoDays(a)-tramoDays(b));
+  const presentSeg=[...new Set(trData.map(r=>segBucket(r.segmento)))];
+  const stackSegs=SEG_STACK.filter(s=>presentSeg.includes(s));
+  const trDatasets=stackSegs.map(seg=>({
+    label:seg, backgroundColor:SEG_COLOR[seg],
+    data:trL.map(t=>trData.filter(r=>r.tramo===t && segBucket(r.segmento)===seg).reduce((a,r)=>a+r.monto,0)/1e6)
+  }));
+  drawStacked('chTramo',trL,trDatasets,'Millones $');
 
-  // Tasas por segmento
+  // Evolución de tasa ponderada por día y segmento
+  const days=[...new Set(data.map(r=>r.date))].sort();
+  const dayLbl=days.map(d=>d.slice(8,10)+'/'+d.slice(5,7));
+  const evPresent=[...new Set(data.map(r=>segBucket(r.segmento)))];
+  const evSeg=SEG_STACK.filter(s=>evPresent.includes(s));
+  const evDatasets=evSeg.map(seg=>({
+    label:seg, borderColor:SEG_COLOR[seg], backgroundColor:SEG_COLOR[seg], tension:.25, spanGaps:true, pointRadius:2, borderWidth:2,
+    data:days.map(d=>{const w=wavg(data.filter(r=>r.date===d && segBucket(r.segmento)===seg)); return isNaN(w)?null:+w.toFixed(2);})
+  }));
+  evDatasets.unshift({label:'General', borderColor:'#1a1a2e', backgroundColor:'#1a1a2e', borderDash:[5,4], tension:.25, spanGaps:true, pointRadius:0, borderWidth:2,
+    data:days.map(d=>{const w=wavg(data.filter(r=>r.date===d)); return isNaN(w)?null:+w.toFixed(2);})});
+  drawLine('chEvol',dayLbl,evDatasets);
+
+  // Tasas por segmento (tabla)
   const segs={}; data.forEach(r=>{const s=r.segmento||'—'; (segs[s]=segs[s]||[]).push(r);});
   const segRows=Object.keys(segs).map(s=>({s,rows:segs[s]})).sort((a,b)=>sum(b.rows)-sum(a.rows));
-  const segCls=s=>/aval/i.test(s)?'seg-aval':/no\s*gar/i.test(s)?'seg-nogar':/gar/i.test(s)?'seg-gar':'';
+  const segCls=s=>/no\s*gar/i.test(s)?'seg-nogar':/aval/i.test(s)?'seg-aval':/gar/i.test(s)?'seg-gar':'';
   document.querySelector('#tblSeg tbody').innerHTML=segRows.map(x=>{
     const v=sum(x.rows);
     return `<tr><td class="${segCls(x.s)}">${x.s}</td><td>${pct(wavg(x.rows))}</td><td>${fmtM(v)}</td><td>${(v/total*100).toFixed(1)}%</td><td>${fmtN(x.rows.length)}</td></tr>`;
-  }).join('');
-
-  // Top empresas
-  const byEmp={}; data.forEach(r=>{ if(!r.empresa) return; (byEmp[r.empresa]=byEmp[r.empresa]||[]).push(r);});
-  const top=Object.keys(byEmp).map(e=>({e,rows:byEmp[e]})).sort((a,b)=>sum(b.rows)-sum(a.rows)).slice(0,15);
-  document.querySelector('#tblTop tbody').innerHTML=top.map(x=>{
-    const cat=x.rows[0].categoria||'—';
-    return `<tr><td>${x.e}</td><td>${cat}</td><td>${fmtM(sum(x.rows))}</td><td>${pct(wavg(x.rows))}</td><td>${isNaN(wppv(x.rows))?'—':fmtN(wppv(x.rows))}</td><td>${fmtN(x.rows.length)}</td></tr>`;
   }).join('');
 
   document.getElementById('mktFoot').innerHTML=`Fuente: monitor MAV de one618 (operaciones individuales del Mercado Argentino de Valores). Tasas promedio ponderadas por monto. Documento de uso interno — no constituye asesoramiento financiero.`;
@@ -424,14 +440,26 @@ function drawPie(id,labels,vals,colors){
   if(charts[id]) charts[id].destroy();
   charts[id]=new Chart(document.getElementById(id),{type:'doughnut',
     data:{labels,datasets:[{data:vals,backgroundColor:colors}]},
-    options:{plugins:{legend:{position:'right',labels:{font:{size:11}}},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12}},
       tooltip:{callbacks:{label:c=>`${c.label}: $${c.raw.toLocaleString('es-AR',{maximumFractionDigits:0})} M`}}}}});
 }
-function drawBar(id,labels,vals,color,yt){
+function drawStacked(id,labels,datasets,yt){
   if(charts[id]) charts[id].destroy();
-  charts[id]=new Chart(document.getElementById(id),{type:'bar',
-    data:{labels,datasets:[{data:vals,backgroundColor:color}]},
-    options:{plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:yt},ticks:{callback:v=>v.toLocaleString('es-AR',{maximumFractionDigits:0})}}}}});
+  charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels,datasets},
+    options:{maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: $${c.raw.toLocaleString('es-AR',{maximumFractionDigits:0})} M`}}},
+      scales:{x:{stacked:true,grid:{display:false}},
+        y:{stacked:true,grid:{display:false},border:{display:false},title:{display:true,text:yt},ticks:{callback:v=>v.toLocaleString('es-AR',{maximumFractionDigits:0})}}}}});
+}
+function drawLine(id,labels,datasets){
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw==null?'—':c.raw.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%'}`}}},
+      scales:{x:{grid:{display:false}},
+        y:{grid:{color:'#f0f0f3'},border:{display:false},title:{display:true,text:'TNA %'},ticks:{callback:v=>v+'%'}}}}});
 }
 
 // ══════════════ INIT / UI ══════════════
