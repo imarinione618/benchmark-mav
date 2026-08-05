@@ -210,7 +210,7 @@ const CSV_URLS = [
 const CAT_COLORS = {'SGR':'#E32D91','PyME':'#1A49C8','Banco':'#7B1FAE','Gran empresa':'#212121','Sector público/ Asociación civil':'#B2B2B2','Sin clasificar':'#6B7280'};
 const INST_COLORS = ['#1A49C8','#E32D91','#7B1FAE','#B2B2B2','#22c55e','#eab308'];
 // Segmentos estilo informe MAV
-const SEG_COLOR={'Avalado':'#29ABE2','Garantizado':'#F7941E','No Garantizado':'#0A2472','Otro':'#B2B2B2'};
+const SEG_COLOR={'Avalado':'#1A49C8','Garantizado':'#7B1FAE','No Garantizado':'#E32D91','Otro':'#B2B2B2'};
 const SEG_STACK=['No Garantizado','Avalado','Garantizado','Otro']; // orden de apilado (abajo→arriba)
 function segBucket(s){ if(/no\s*gar/i.test(s)) return 'No Garantizado'; if(/aval/i.test(s)) return 'Avalado'; if(/gar/i.test(s)) return 'Garantizado'; return 'Otro'; }
 
