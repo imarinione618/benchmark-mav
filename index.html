@@ -62,20 +62,20 @@
   .verdict{display:flex;gap:22px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-bottom:6px}
   .verdict .big{font-size:34px;font-weight:800;line-height:1}
   .verdict p{color:var(--muted);font-size:13px;line-height:1.5;margin-top:4px}
-  .pct-hi{color:var(--bad)} .pct-mid{color:var(--warn)} .pct-lo{color:var(--good)}
+  .pct-hi{color:var(--pink)} .pct-mid{color:var(--muted)} .pct-lo{color:var(--blue)}
   .scale{position:relative;height:60px;margin:30px 8px 40px}
-  .track{position:absolute;top:24px;left:0;right:0;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--good),var(--warn) 55%,var(--bad))}
+  .track{position:absolute;top:24px;left:0;right:0;height:12px;border-radius:8px;border:1px solid var(--line);background:linear-gradient(90deg,var(--blue),#ffffff 50%,var(--pink))}
   .mk{position:absolute;top:6px;transform:translateX(-50%);text-align:center;font-size:11px}
   .mk .dot{width:2px;height:32px;background:var(--ink);opacity:.45;margin:0 auto}
   .you{position:absolute;top:-16px;transform:translateX(-50%);text-align:center}
   .you .lbl{background:var(--ink);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap;margin-bottom:2px}
   .you .pin{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid var(--ink);margin:0 auto}
   .axis{position:absolute;bottom:-4px;width:100%;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
-  .save{display:flex;gap:22px;align-items:center;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:18px 22px}
-  .save .amt{font-size:32px;font-weight:800;color:var(--good);line-height:1}
+  .save{display:flex;gap:22px;align-items:center;background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:18px 22px}
+  .save .amt{font-size:32px;font-weight:800;color:var(--blue);line-height:1}
   .save .amt small{display:block;font-size:13px;color:var(--muted);font-weight:600;margin-top:2px}
   .save ul{list-style:none;font-size:13px;line-height:1.7}
-  .save li b{color:var(--good)}
+  .save li b{color:var(--blue)}
   .empty{color:var(--muted);text-align:center;padding:40px;font-size:14px}
   .note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
   .foot{font-size:11px;color:var(--muted);margin-top:20px;padding-top:12px;border-top:1px solid var(--line);line-height:1.6}
@@ -376,7 +376,7 @@ function renderBenchmark(){
   document.getElementById('bmkRate').textContent=pct(eRate);
   document.getElementById('bmkMkt').textContent=pct(mRate);
   document.getElementById('bmkSegLbl').textContent=`${domInst} · ${domSeg}`;
-  document.getElementById('bmkGap').innerHTML=`<span style="color:${gap>0?'var(--bad)':'var(--good)'}">${gap>0?'+':''}${gap.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})} pp</span>`;
+  document.getElementById('bmkGap').innerHTML=`<span style="color:${gap>0?'var(--pink)':'var(--blue)'}">${gap>0?'+':''}${gap.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})} pp</span>`;
 
   // Percentil por VOLUMEN: % del volumen de mercado transado a tasa <= tasa de la empresa
   const volMenor=mkt.filter(r=>r.tasa<=eRate).reduce((a,r)=>a+r.monto,0);
@@ -428,7 +428,7 @@ function renderBenchmark(){
   document.querySelector('#bmkTramo tbody').innerHTML=tramos.map(t=>{
     const er=eComp.filter(r=>r.tramo===t), mr=mkt.filter(r=>r.tramo===t);
     const et=wavg(er), mt=wavg(mr), g=et-mt;
-    return `<tr><td>${t}</td><td>${pct(et)}</td><td>${pct(mt)}</td><td style="color:${g>0?'var(--bad)':'var(--good)'}">${g>0?'+':''}${g.toFixed(2)} pp</td><td>${fmtM(sum(er))}</td><td>${fmtN(er.length)}</td></tr>`;
+    return `<tr><td>${t}</td><td>${pct(et)}</td><td>${pct(mt)}</td><td style="color:${g>0?'var(--pink)':'var(--blue)'}">${g>0?'+':''}${g.toFixed(2)} pp</td><td>${fmtM(sum(er))}</td><td>${fmtN(er.length)}</td></tr>`;
   }).join('');
 
   // Operaciones
