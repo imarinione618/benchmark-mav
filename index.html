@@ -162,6 +162,14 @@
       <h2 id="bmkTitle">—</h2>
       <div class="peri" id="bmkPeri">—</div>
 
+      <div class="bmk-filters" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin:8px 0 2px">
+        <div class="ctl"><label>Comparar contra · Categoría</label>
+          <select id="fCat"><option value="ALL">Todas</option></select></div>
+        <div class="ctl"><label>Comparar contra · Sector</label>
+          <select id="fSec"><option value="ALL">Todos</option></select></div>
+        <div class="note" style="align-self:flex-end;max-width:340px;margin:0">Refinan el universo de mercado; se suman al mismo instrumento y segmento de la empresa. Combinables en cualquier orden.</div>
+      </div>
+
       <div class="verdict">
         <div><div class="big" id="bmkPctBig">—</div></div>
         <div><div id="bmkVerdict" style="font-size:17px;font-weight:700"></div><p id="bmkVerdictP"></p></div>
@@ -207,6 +215,10 @@ const CSV_URLS = [
   `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?gid=${GID}&single=true&output=csv`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`,
 ];
+// Pestaña "categorias": lookup empresa → {categoria, sector}. Se cruza por NOMBRE de empresa.
+const CATSEC_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=categorias`,
+];
 const CAT_COLORS = {'SGR':'#E32D91','PyME':'#1A49C8','Banco':'#7B1FAE','Gran empresa':'#212121','Sector público/ Asociación civil':'#B2B2B2','Sin clasificar':'#6B7280'};
 const INST_COLORS = ['#1A49C8','#E32D91','#7B1FAE','#B2B2B2','#22c55e','#eab308'];
 // Segmentos estilo informe MAV
@@ -217,6 +229,47 @@ function segBucket(s){ if(/no\s*gar/i.test(s)) return 'No Garantizado'; if(/aval
 // ══════════════ ESTADO ══════════════
 let rawData = [];
 let charts = {};
+let CATSEC = {};        // normName(empresa) → {categoria, sector}
+let catsecOk = false;   // se pudo cargar la pestaña categorias
+
+// ══════════════ LOOKUP CATEGORÍA / SECTOR (pestaña "categorias") ══════════════
+function normName(s){ return (s||'').replace(/"/g,'').trim().replace(/\s+/g,' ').toUpperCase(); }
+function parseCatSec(text){
+  const lines=text.split(/\r?\n/); if(lines.length<2) return {};
+  const headers=parseCSVRow(lines[0].replace(/^﻿/,'')).map(h=>h.trim().replace(/"/g,'').toLowerCase());
+  let iInst=headers.findIndex(h=>/instituc|empresa|nombre|responsable/.test(h));
+  let iCat =headers.findIndex(h=>/categor/.test(h));
+  let iSec =headers.findIndex(h=>/sector/.test(h));
+  if(iInst<0) iInst=0; if(iCat<0) iCat=1; if(iSec<0) iSec=2;
+  const map={};
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim()) continue;
+    const r=parseCSVRow(lines[i]);
+    const nm=normName(r[iInst]); if(!nm) continue;
+    map[nm]={
+      categoria:(r[iCat]||'').replace(/"/g,'').trim()||'Sin clasificar',
+      sector:(r[iSec]||'').replace(/"/g,'').trim()||'Sin clasificar'
+    };
+  }
+  return map;
+}
+// Adjunta categoría (de la pestaña) y sector a cada operación, cruzando por nombre.
+function attachCatSec(rows){
+  rows.forEach(r=>{
+    const m=CATSEC[normName(r.empresa)];
+    r.catL   = m ? m.categoria : 'Sin clasificar';
+    r.sector = m ? m.sector    : 'Sin clasificar';
+  });
+}
+async function loadCatSec(){
+  for(const url of CATSEC_URLS){
+    try{
+      const res=await fetch(url); if(!res.ok) continue;
+      const map=parseCatSec(await res.text());
+      if(Object.keys(map).length){ CATSEC=map; catsecOk=true; return; }
+    }catch(e){}
+  }
+}
 
 // ══════════════ PARSEO (reutiliza lógica del dashboard) ══════════════
 function parseArg(raw){
@@ -363,19 +416,50 @@ function renderBenchmark(){
   box.style.display='block'; empty.style.display='none';
 
   document.getElementById('bmkTitle').textContent=emp;
-  const cat=eRows[0].categoria||'—';
-  document.getElementById('bmkPeri').textContent=`${cat} · ${periLabel()} · ${fmtN(eRows.length)} operaciones · ${fmtM(sum(eRows))}`;
+  const cat=eRows[0].catL||'—', sec=eRows[0].sector||'—';
+  document.getElementById('bmkPeri').textContent=`${cat} · ${sec} · ${periLabel()} · ${fmtN(eRows.length)} operaciones · ${fmtM(sum(eRows))}`;
 
   // Segmento/instrumento dominante de la empresa (por volumen) → universo de mercado comparable
   const domKey = key => { const g={}; eRows.forEach(r=>{g[r[key]]=(g[r[key]]||0)+r.monto;}); return Object.keys(g).sort((a,b)=>g[b]-g[a])[0]; };
   const domSeg=domKey('segmento'), domInst=domKey('tipo');
-  const mkt=data.filter(r=>r.segmento===domSeg && r.tipo===domInst);
+  // Filtros combinables categoría/sector → se SUMAN al mismo instrumento+segmento de la empresa.
+  const selCat=(document.getElementById('fCat')||{}).value||'ALL';
+  const selSec=(document.getElementById('fSec')||{}).value||'ALL';
+  let mkt=data.filter(r=>r.segmento===domSeg && r.tipo===domInst);
+  if(selCat!=='ALL') mkt=mkt.filter(r=>r.catL===selCat);
+  if(selSec!=='ALL') mkt=mkt.filter(r=>r.sector===selSec);
   const eComp=eRows.filter(r=>r.segmento===domSeg && r.tipo===domInst);
+  const filterLbl=[selCat!=='ALL'?selCat:null, selSec!=='ALL'?selSec:null].filter(Boolean).join(' · ');
+  const univLbl=`${domInst} · ${domSeg}${filterLbl?' · '+filterLbl:''}`;
 
-  const eRate=wavg(eComp), mRate=wavg(mkt), gap=eRate-mRate;
+  const eRate=wavg(eComp);
   document.getElementById('bmkRate').textContent=pct(eRate);
+  document.getElementById('bmkSegLbl').textContent=univLbl;
+
+  // Universo vacío tras aplicar filtros → mostrar datos de la empresa y avisar (sin inventar comparación)
+  if(!mkt.length){
+    document.getElementById('bmkMkt').textContent='—';
+    document.getElementById('bmkGap').innerHTML='—';
+    document.getElementById('bmkPctBig').innerHTML='<span class="pct-mid">—</span>';
+    document.getElementById('bmkVerdict').textContent='Sin operaciones de mercado comparables';
+    document.getElementById('bmkVerdictP').innerHTML=`No hay operaciones en el universo <b>${univLbl}</b> para el período/filtros elegidos. Quitá un filtro o ampliá el rango de fechas.`;
+    document.getElementById('bmkScale').innerHTML='';
+    document.getElementById('bmkSave').innerHTML='—<small>ahorro anual estimado</small>';
+    document.getElementById('bmkSaveList').innerHTML='';
+    document.getElementById('bmkSaveNote').innerHTML=`Universo comparable: ${univLbl} — sin operaciones con estos filtros.`;
+    const tramosE=[...new Set(eComp.map(r=>r.tramo))].sort((a,b)=>tramoDays(a)-tramoDays(b));
+    document.querySelector('#bmkTramo tbody').innerHTML=tramosE.map(t=>{
+      const er=eComp.filter(r=>r.tramo===t);
+      return `<tr><td>${t}</td><td>${pct(wavg(er))}</td><td>—</td><td>—</td><td>${fmtM(sum(er))}</td><td>${fmtN(er.length)}</td></tr>`;
+    }).join('');
+    document.querySelector('#bmkOps tbody').innerHTML=[...eRows].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,40).map(r=>
+      `<tr><td>${r.date}</td><td>${r.tipo}</td><td>${r.segmento}</td><td>${r.moneda}</td><td>${r.tramo}</td><td>${pct(r.tasa)}</td><td>${fmtM(r.monto)}</td></tr>`).join('');
+    document.getElementById('bmkFoot').innerHTML=`Fuente: monitor MAV de one618. Uso interno — no constituye asesoramiento financiero ni oferta.`;
+    return;
+  }
+
+  const mRate=wavg(mkt), gap=eRate-mRate;
   document.getElementById('bmkMkt').textContent=pct(mRate);
-  document.getElementById('bmkSegLbl').textContent=`${domInst} · ${domSeg}`;
   document.getElementById('bmkGap').innerHTML=`<span style="color:${gap>0?'var(--pink)':'var(--blue)'}">${gap>0?'+':''}${gap.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})} pp</span>`;
 
   // Percentil por VOLUMEN: % del volumen de mercado transado a tasa <= tasa de la empresa
@@ -389,7 +473,7 @@ function renderBenchmark(){
   else if(percentile>=50){verd='Paga por encima de la mediana del mercado';}
   else if(percentile>=25){verd='Paga por debajo de la mediana del mercado';}
   else {verd='Está entre lo más barato del mercado';}
-  verdP=`Su tasa (${pct(eRate)}) es mayor o igual a la de <b>${isNaN(percentile)?'—':percentile}%</b> del volumen negociado en ${domInst.toLowerCase()} ${domSeg.toLowerCase()} en el período. Promedio de mercado: ${pct(mRate)}.`;
+  verdP=`Su tasa (${pct(eRate)}) es mayor o igual a la de <b>${isNaN(percentile)?'—':percentile}%</b> del volumen negociado en <b>${univLbl}</b> en el período. Promedio de mercado: ${pct(mRate)}.`;
   document.getElementById('bmkVerdict').textContent=verd;
   document.getElementById('bmkVerdictP').innerHTML=verdP;
 
@@ -421,7 +505,7 @@ function renderBenchmark(){
     <li>Sobre volumen comparable de <b>${fmtM(vol)}</b> y plazo pond. <b>${fmtN(plazo)} días</b></li>
     <li>Llegando a la <b>mediana (${pct(p50)})</b> el ahorro sería <b>≈ ${fmtMoney(saveP50)}</b></li>
     <li><b>Proyección anual</b> — si sostenés este volumen financiado todo el año: <b>≈ ${fmtMoney(saveAnual)}</b> <span style="color:var(--muted)">(supuesto)</span></li>`;
-  document.getElementById('bmkSaveNote').innerHTML=`Ahorro = Δtasa × volumen comparable × (plazo/365) — es el interés que pagó de más en estas operaciones, no anualizado. Universo comparable: ${domInst} · ${domSeg}. Plazo tomado de PPV real ${isNaN(wppv(eComp))?'(o estimado por tramo si falta)':''}.`;
+  document.getElementById('bmkSaveNote').innerHTML=`Ahorro = Δtasa × volumen comparable × (plazo/365) — es el interés que pagó de más en estas operaciones, no anualizado. Universo comparable: ${univLbl}. Plazo tomado de PPV real ${isNaN(wppv(eComp))?'(o estimado por tramo si falta)':''}.`;
 
   // Detalle por tramo
   const tramos=[...new Set(eComp.map(r=>r.tramo))].sort((a,b)=>tramoDays(a)-tramoDays(b));
@@ -484,7 +568,20 @@ function initFilters(){
   const mons=[...new Set(rawData.map(r=>r.moneda).filter(Boolean))];
   const selM=document.getElementById('fMon');
   mons.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;selM.appendChild(o);});
+  // categoría y sector (desde el lookup adjuntado); 'Sin clasificar' al final
+  const sortCS=arr=>arr.filter(Boolean).sort((a,b)=>a==='Sin clasificar'?1:b==='Sin clasificar'?-1:a.localeCompare(b,'es'));
+  fillSelect('fCat', sortCS([...new Set(rawData.map(r=>r.catL))]));
+  fillSelect('fSec', sortCS([...new Set(rawData.map(r=>r.sector))]));
   refreshEmpList();
+}
+// Rellena un select conservando su primera opción ("Todas/Todos") y la selección previa
+function fillSelect(id, values){
+  const sel=document.getElementById(id); if(!sel) return;
+  const prev=sel.value;
+  const first=sel.options[0];
+  sel.innerHTML=''; sel.appendChild(first);
+  values.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o);});
+  sel.value=[...sel.options].some(o=>o.value===prev)?prev:'ALL';
 }
 function refreshEmpList(){
   const data=currentFilter();
@@ -504,13 +601,15 @@ function setStatus(msg,err){ const s=document.getElementById('status'); s.textCo
 
 async function loadData(){
   setStatus('Cargando datos del monitor…');
+  await loadCatSec();
   let lastErr='';
   for(const url of CSV_URLS){
     try{
       const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
       rawData=parseCSV(await res.text());
       if(!rawData.length) throw new Error('CSV sin filas válidas');
-      setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del monitor.`);
+      attachCatSec(rawData);
+      setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del monitor.`+(catsecOk?'':' ⚠ No se pudo cargar la pestaña de categorías (sector/categoría quedarán como “Sin clasificar”).'),!catsecOk);
       initFilters(); regen(); return;
     }catch(e){ lastErr=e.message; }
   }
@@ -524,13 +623,17 @@ document.getElementById('fInst').onchange=regen;
 document.getElementById('fMon').onchange=regen;
 document.getElementById('fDesde').onchange=regen;
 document.getElementById('fHasta').onchange=regen;
+document.getElementById('fCat').onchange=renderBenchmark;
+document.getElementById('fSec').onchange=renderBenchmark;
 document.getElementById('btnCsv').onclick=()=>document.getElementById('fileInput').click();
 document.getElementById('fileInput').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
   const rd=new FileReader();
-  rd.onload=()=>{ rawData=parseCSV(rd.result);
+  rd.onload=async()=>{ rawData=parseCSV(rd.result);
     if(!rawData.length){ setStatus('El CSV no tiene filas válidas.',true); return; }
-    setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del archivo ${f.name}.`);
+    if(!catsecOk) await loadCatSec();
+    attachCatSec(rawData);
+    setStatus(`✓ ${fmtN(rawData.length)} operaciones cargadas del archivo ${f.name}.`+(catsecOk?'':' ⚠ sin pestaña de categorías (sector “Sin clasificar”).'),!catsecOk);
     initFilters(); regen(); };
   rd.readAsText(f,'UTF-8');
 };
